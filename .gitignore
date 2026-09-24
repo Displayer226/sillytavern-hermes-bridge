@@ -1,0 +1,15 @@
+.deploy/
+*.env
+.env
+.env.*
+!.env.example
+!.env.public.example
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+*.log
+*.sqlite3
+*.db
+*.tgz
+.worktrees/

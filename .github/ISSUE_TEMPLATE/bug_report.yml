@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a reproducible problem in the supported local text-only setup
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form only for the supported local, text-only setup with the Hermes `default` profile and tools disabled. Do not use a public issue to report a security vulnerability; see `SECURITY.md`.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Supported setup
+      options:
+        - label: I reproduced this with the Quick Start configuration (text-only, default profile, tools disabled, loopback ingress).
+          required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem without including prompts, chat contents, credentials, or private data.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the steps and the expected result. Replace private values with placeholders.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Relevant versions
+      description: Include repository revision, OS, Docker/Compose, Node.js if relevant, and SillyTavern version. Do not include hostnames or account names.
+    validations:
+      required: true
+  - type: textarea
+    id: redacted_logs
+    attributes:
+      label: Redacted logs
+      description: Paste a short, reviewed excerpt. Write “Not available” and explain if there are no useful logs. Remove secrets, identities, paths, session IDs, and all conversation content before posting.
+      placeholder: |
+        [redacted] proxy: connection failed
+        Not available — explain why
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy_review
+    attributes:
+      label: Privacy review
+      options:
+        - label: I removed proxy and provider tokens, Dashboard credentials, private host/user identifiers, local paths, session identifiers, request bodies, prompts, and chat content from this report and its logs.
+          required: true

@@ -1,0 +1,139 @@
+# Local text-only candidate for the public Phase 2 install.
+# Build contexts are the exact super-project submodule gitlinks.
+services:
+  hermes:
+    build:
+      context: ./hermes-agent
+      args:
+        HERMES_GIT_SHA: 5661709c997cb5557cc337fd428b44c598ab43ca
+    image: sillytavern-hermes/hermes-agent:5661709c
+    restart: unless-stopped
+    command: ["serve", "--host", "0.0.0.0"]
+    environment:
+      HERMES_UID: "10000"
+      HERMES_GID: "10000"
+      HERMES_DASHBOARD: "0"
+      # Keep the TUI from interpreting an empty selected set as "all". The
+      # fresh default compressor contributes no context_engine schemas.
+      HERMES_TUI_TOOLSETS: context_engine
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:?Set a private Dashboard username in .env.public}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:?Set a private Dashboard password in .env.public}
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${HERMES_DASHBOARD_BASIC_AUTH_SECRET:?Set a private Dashboard signing secret in .env.public}
+    volumes:
+      - hermes-state:/opt/data
+    networks:
+      backend: {}
+      model-egress:
+        gw_priority: 1
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - >-
+          import json, urllib.request;
+          status = json.load(urllib.request.urlopen('http://127.0.0.1:9119/api/status', timeout=3));
+          assert status.get('auth_required') is True and 'basic' in status.get('auth_providers', [])
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  proxy:
+    build:
+      context: ./proxy-ST
+    image: sillytavern-hermes/session-proxy:phase2
+    restart: unless-stopped
+    depends_on:
+      hermes:
+        condition: service_healthy
+    environment:
+      WS_TOKEN: ${WS_TOKEN:?Generate a proxy token and put it in .env.public}
+      PROXY_WS_QUERY_TOKEN_COMPAT: "false"
+      PROXY_FETCH_BACKEND_MODELS: "false"
+      PROXY_MODELS: hermes
+      # The public text-only candidate may use only Hermes's default profile.
+      HERMES_PROFILE_ALLOWLIST: "default"
+      HERMES_WS_URL: ws://hermes:9119/api/ws
+      HERMES_DASHBOARD_URL: http://hermes:9119/
+      HERMES_DASHBOARD_AUTH_MODE: password
+      HERMES_DASHBOARD_AUTH_PROVIDER: basic
+      HERMES_DASHBOARD_AUTH_USERNAME: ${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:?Set a private Dashboard username in .env.public}
+      HERMES_DASHBOARD_AUTH_PASSWORD: ${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:?Set a private Dashboard password in .env.public}
+      SESSION_PERSISTENCE_ENABLED: "true"
+      SESSION_PERSISTENCE_BACKEND: sqlite
+      SESSIONS_DB_FILE: /app/data/sessions.sqlite3
+      WORKSPACE_EXPLORER_ENABLED: "false"
+      LOG_INCLUDE_BODIES: "false"
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set SillyTavern browser origins in .env.public}
+    volumes:
+      - proxy-state:/app/data
+      - proxy-logs:/app/logs
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)
+      interval: 10s
+      timeout: 7s
+      retries: 12
+      start_period: 30s
+
+  proxy-ingress:
+    # Publish through this small gateway; the proxy remains on the internal
+    # backend network and never receives a host-published port.
+    image: nginx:alpine@sha256:1ed1b0e1d7652937d6cbdaf4018c7b6fc009a7dd6c3047351e2eddda745de43f
+    restart: unless-stopped
+    depends_on:
+      proxy:
+        condition: service_healthy
+    entrypoint: ["nginx"]
+    command: ["-g", "daemon off;"]
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    ports:
+      - "127.0.0.1:${PROXY_HOST_PORT:-8010}:8080"
+    volumes:
+      - ./images/public-proxy-ingress/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      backend: {}
+      ingress:
+        gw_priority: 1
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/health/ready || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+networks:
+  # Proxy-to-Hermes traffic stays on a private network with no external route.
+  backend:
+    driver: bridge
+    internal: true
+  # Only Hermes joins this bridge to reach the selected model provider.
+  model-egress:
+    driver: bridge
+  # The ingress gateway needs a non-internal bridge for loopback port publishing.
+  # The proxy itself is not attached to this network.
+  ingress:
+    driver: bridge
+
+volumes:
+  hermes-state:
+  proxy-state:
+  proxy-logs:
