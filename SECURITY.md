@@ -8,7 +8,7 @@ Voice, enabled tools, workspaces, non-default profiles, remote ingress, and mult
 
 ## Reporting a vulnerability
 
-Do not report security vulnerabilities in a public issue. Before public release, the repository owner should enable GitHub's private vulnerability reporting. Use the repository's **Report a vulnerability** link when it is available. No maintainer email address or account identity is published here yet, so there is no verified alternate private contact route in this export.
+Do not report security vulnerabilities in a public issue. GitHub private vulnerability reporting is enabled for this repository; use its **Report a vulnerability** link. No separate maintainer email address is published.
 
 Include the affected component and version, impact, reproduction steps, and any mitigation you have found. Do not include working credentials, provider keys, proxy tokens, private prompts, chat transcripts, session databases, or unredacted logs. Give maintainers reasonable time to investigate and coordinate a fix before public disclosure.
 

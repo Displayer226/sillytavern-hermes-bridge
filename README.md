@@ -1,6 +1,6 @@
 # SillyTavern Hermes Bridge
 
-Use SillyTavern as the conversation frontend for a persistent Hermes Agent session. This repository contains a local Docker Compose candidate with a companion SillyTavern extension and a session-aware proxy.
+Use SillyTavern as the conversation frontend for a persistent Hermes Agent session. This repository is a technical preview with a local Docker Compose setup, a companion SillyTavern extension, and a session-aware proxy. Bugs and rough edges are expected; this is not a versioned release or demo announcement.
 
 The supported path in this Quick Start is **text-only** and **Hermes Agent only**. It uses the default Hermes profile with tools disabled, publishes the ingress on loopback, and does not mount a host workspace or Docker socket. Voice, tools, custom profiles, remote access, and multi-user deployments are outside this setup.
 
