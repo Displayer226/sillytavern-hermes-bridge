@@ -119,7 +119,7 @@ jobs:
                   raise SystemExit("A tracked path escapes the scan directory.")
               target.parent.mkdir(parents=True, exist_ok=True)
               blob = subprocess.run(
-                  ["git", "cat-file", "blob", object_id.decode("ascii")],
+                  ["git", "cat-file", "blob", object_id],
                   check=True,
                   stdout=subprocess.PIPE,
               ).stdout
