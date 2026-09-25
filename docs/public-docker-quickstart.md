@@ -2,7 +2,7 @@
 
 This guide configures one local SillyTavern-to-Hermes text path. It uses the pinned Hermes source commit recorded in this repository, a local proxy build, and the companion extension. The stack binds its only host port to loopback. The proxy allows only Hermes's `default` profile in this path: it rejects explicit non-default selections sent through its HTTP or WebSocket APIs, and discards a saved non-default selection before restoring a session so the session uses `default`. It does not configure tools, a host workspace, voice, remote access, or multi-user use.
 
-**Validation status:** the text conversation and proxy-only restart flow were exercised in a disposable VM using Docker Engine 29.8.1 and Compose 5.5.1. A clean clone from the future public repository has not yet been tested; replace the repository owner placeholder and rerun this guide from an anonymous clone before publication.
+**Validation status:** on 2026-09-25, the text-only conversation and proxy-only restart flow passed in a disposable VM using Docker Engine 29.8.1 and Compose 5.5.1. This run used a fresh local Git clone created from a local Git bundle, at super-project commit `97c73bd9639a42b1f0d80b82c9b77bdbfe9b67e3` with Hermes submodule `5661709c997cb5557cc337fd428b44c598ab43ca`. It has not yet been tested from an anonymous GitHub clone; replace the repository owner placeholder and rerun this guide from an anonymous clone before publication.
 
 ## Requirements
 
@@ -98,6 +98,8 @@ cp -a responses-proxy/dist "$ST_DIR/public/scripts/extensions/third-party/respon
 ```
 
 Reload SillyTavern and enable **Responses Proxy**. In API Connections, select **Custom OpenAI** and set the base URL to `http://127.0.0.1:8010/v1`, the API key to the `WS_TOKEN` from `.env.public`, and the model to `hermes`. Set the same proxy token in the extension panel. If needed, set the WebSocket override to `ws://127.0.0.1:8010/ws`. Leave profile, model, and workspace overrides empty.
+
+After entering or changing the proxy token in the extension panel or the WebSocket URL override, reload SillyTavern again. The extension does not reconnect live when these settings change. After the reload, reconnect **Custom OpenAI** in API Connections if SillyTavern no longer shows it as connected.
 
 ## Smoke check and limits
 
