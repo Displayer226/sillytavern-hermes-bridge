@@ -123,7 +123,7 @@ function App({ context }) {
     const handleNotificationToggle = (key) => (e) => {
         if (e.target.checked && 'Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission().catch((error) => {
-                console.warn('[Responses Proxy] Notification permission request failed:', error);
+                console.warn('[Hermes Bridge] Notification permission request failed:', error);
             });
         }
         const next = {
@@ -151,7 +151,7 @@ function App({ context }) {
             <div className="inline-drawer-toggle inline-drawer-header">
                 <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <i className="fa-solid fa-network-wired" style={{ color: '#00b4d8' }}></i>
-                    <b>Responses Proxy Session</b>
+                    <b>Hermes Bridge Session</b>
                 </span>
                 <div className="fa-solid fa-circle-chevron-down inline-drawer-icon down"></div>
             </div>

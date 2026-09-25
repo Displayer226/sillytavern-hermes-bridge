@@ -1,11 +1,11 @@
 {
-    "display_name": "Responses Proxy",
+    "display_name": "Hermes Bridge",
     "loading_order": 1,
     "requires": [],
     "optional": [],
-    "js": "dist/index.js?v=1.1.1",
+    "js": "dist/index.js?v=1.1.2",
     "author": "SillyTavern Hermes Bridge maintainers",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "homePage": "https://github.com/Displayer226/sillytavern-hermes-bridge",
     "auto_update": false
 }

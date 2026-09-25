@@ -129,13 +129,13 @@ export function deriveWsUrl(context) {
 
             // 3. Docker-internal hostname: fall back to reverse proxy path
             console.info(
-                '[Responses Proxy WS] custom_url "%s" is not browser-reachable, ' +
+                '[Hermes Bridge WS] custom_url "%s" is not browser-reachable, ' +
                 'falling back to /proxy-ws/ws reverse proxy route',
                 redactWsUrl(baseUrl),
             );
         }
     } catch (e) {
-        console.warn('[Responses Proxy WS] Failed to derive URL from settings:', e);
+        console.warn('[Hermes Bridge WS] Failed to derive URL from settings:', e);
     }
 
     // 4. Fallback: same host with /proxy-ws/ws (requires reverse proxy route)
@@ -234,7 +234,7 @@ class WebSocketService {
         const nextUrl = url || this._url;
         const nextSessionId = sessionId || null;
         if (!nextUrl) {
-            console.warn('[Responses Proxy WS] Cannot connect: missing URL');
+            console.warn('[Hermes Bridge WS] Cannot connect: missing URL');
             return;
         }
 
@@ -313,7 +313,7 @@ class WebSocketService {
      */
     send(msg) {
         if (!this.isConnected) {
-            console.warn('[Responses Proxy WS] Cannot send, not connected:', msg.type);
+            console.warn('[Hermes Bridge WS] Cannot send, not connected:', msg.type);
             return;
         }
         this._ws.send(JSON.stringify(msg));
@@ -338,7 +338,7 @@ class WebSocketService {
             try {
                 callback({ connection_id: this._connectionId });
             } catch (e) {
-                console.error('[Responses Proxy WS] Connected listener error:', e);
+                console.error('[Hermes Bridge WS] Connected listener error:', e);
             }
         }
 
@@ -381,7 +381,7 @@ class WebSocketService {
         let socket;
         try {
             // Never log the raw URL or the auth subprotocol (it carries the token).
-            console.log('[Responses Proxy WS] Connecting to %s', redactWsUrl(this._url));
+            console.log('[Hermes Bridge WS] Connecting to %s', redactWsUrl(this._url));
             // The token travels in the auth.* subprotocol, never in the URL.
             // The server selects only the fixed application protocol.
             socket = this._authProtocol
@@ -391,7 +391,7 @@ class WebSocketService {
         } catch (e) {
             // Constructor failures echo the full URL (token included) in their
             // message; log a sanitized reason instead of the error itself.
-            console.error('[Responses Proxy WS] Failed to create WebSocket for %s (%s)',
+            console.error('[Hermes Bridge WS] Failed to create WebSocket for %s (%s)',
                 redactWsUrl(this._url), e instanceof Error ? e.name : typeof e);
             this._scheduleReconnect();
             return;
@@ -402,7 +402,7 @@ class WebSocketService {
                 socket.close();
                 return;
             }
-            console.log('[Responses Proxy WS] Connected');
+            console.log('[Hermes Bridge WS] Connected');
             this._connected = true;
             this._reconnectDelay = 1000;
             if (this._sessionId) {
@@ -415,7 +415,7 @@ class WebSocketService {
             if (this._ws !== socket) return;
             // Guard against unreasonably large messages (10 MiB)
             if (typeof event.data === 'string' && event.data.length > 10 * 1024 * 1024) {
-                console.warn('[Responses Proxy WS] Dropping oversized message (%d bytes)', event.data.length);
+                console.warn('[Hermes Bridge WS] Dropping oversized message (%d bytes)', event.data.length);
                 return;
             }
             try {
@@ -489,7 +489,7 @@ class WebSocketService {
 
                 this._emit(msgType, data);
             } catch (e) {
-                console.warn('[Responses Proxy WS] Failed to parse message:', e);
+                console.warn('[Hermes Bridge WS] Failed to parse message:', e);
             }
         };
 
@@ -498,7 +498,7 @@ class WebSocketService {
             // socket's close event arrives. Never let that stale event start a
             // second reconnect loop.
             if (this._ws !== socket) return;
-            console.log('[Responses Proxy WS] Closed:', event.code, event.reason);
+            console.log('[Hermes Bridge WS] Closed:', event.code, event.reason);
             this._connected = false;
             this._emit('disconnected', { code: event.code, reason: event.reason });
             if (!this._intentionalClose) {
@@ -510,7 +510,7 @@ class WebSocketService {
             if (this._ws !== socket) return;
             // Error events expose the full URL (token included) via
             // event.target; emit the Event object and log a redacted label.
-            console.error('[Responses Proxy WS] WebSocket error on %s', redactWsUrl(this._url));
+            console.error('[Hermes Bridge WS] WebSocket error on %s', redactWsUrl(this._url));
             this._emit('error', { event, url: redactWsUrl(this._url) });
         };
     }
@@ -518,7 +518,7 @@ class WebSocketService {
     _scheduleReconnect() {
         this._clearReconnectTimer();
         const delay = this._reconnectDelay;
-        console.log(`[Responses Proxy WS] Reconnecting in ${delay}ms...`);
+        console.log(`[Hermes Bridge WS] Reconnecting in ${delay}ms...`);
         this._reconnectTimer = setTimeout(() => {
             this._reconnectDelay = Math.min(this._reconnectDelay * 2, this._maxReconnectDelay);
             this._doConnect();
@@ -543,7 +543,7 @@ class WebSocketService {
                 try {
                     cb(data);
                 } catch (e) {
-                    console.error(`[Responses Proxy WS] Listener error for "${event}":`, e);
+                    console.error(`[Hermes Bridge WS] Listener error for "${event}":`, e);
                 }
             }
         }

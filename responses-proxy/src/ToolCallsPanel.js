@@ -2466,7 +2466,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
             });
             if (!append) seedReadState(pageCalls);
         } catch (error) {
-            console.warn('[Responses Proxy] Failed to fetch tool call history:', error);
+            console.warn('[Hermes Bridge] Failed to fetch tool call history:', error);
         } finally {
             setToolCallsLoading(false);
         }
@@ -2551,7 +2551,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
                     notification.close();
                 };
             } catch (e) {
-                console.warn('[Responses Proxy] Browser notification failed:', e);
+                console.warn('[Hermes Bridge] Browser notification failed:', e);
             }
         };
 
@@ -2561,7 +2561,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
             Notification.requestPermission().then((permission) => {
                 if (permission === 'granted') show();
             }).catch((error) => {
-                console.warn('[Responses Proxy] Notification permission request failed:', error);
+                console.warn('[Hermes Bridge] Notification permission request failed:', error);
             });
         }
     }, []);
@@ -2841,7 +2841,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
         });
 
         const unsubServerError = wsService.on('server_error', (data) => {
-            console.warn('[Responses Proxy WS] Server command error:', data.message || data);
+            console.warn('[Hermes Bridge WS] Server command error:', data.message || data);
         });
 
         const unsubAgentControlResult = wsService.on('agent_control_result', (data) => {
@@ -2861,7 +2861,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
                 setAgentControlMessage({ tone: isError ? 'error' : 'ok', text });
             }
             if (isError) {
-                console.warn('[Responses Proxy WS] Agent control failed:', data);
+                console.warn('[Hermes Bridge WS] Agent control failed:', data);
                 SillyTavern.toastr?.error?.(text);
                 waiter?.reject?.(new Error(text));
                 return;
@@ -3106,7 +3106,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
 
     const sendAgentControl = useCallback((action, payload = {}) => {
         sendAgentControlRequest(action, payload).catch((error) => {
-            console.warn('[Responses Proxy] Agent control failed:', error);
+            console.warn('[Hermes Bridge] Agent control failed:', error);
         });
     }, [sendAgentControlRequest]);
 
@@ -3147,7 +3147,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
             requestSessionSnapshot();
         } catch (error) {
             const text = error?.message || 'Undo failed';
-            console.warn('[Responses Proxy] Undo failed:', error);
+            console.warn('[Hermes Bridge] Undo failed:', error);
             setAgentControlMessage({ tone: 'error', text });
             SillyTavern.toastr?.error?.(text);
         } finally {
@@ -3185,7 +3185,7 @@ function ToolCallsPanel({ context, voiceOpen, voiceActive, onOpenVoice }) {
             requestSessionSnapshot();
         } catch (error) {
             const text = error?.message || 'Retry failed';
-            console.warn('[Responses Proxy] Retry failed:', error);
+            console.warn('[Hermes Bridge] Retry failed:', error);
             setAgentControlMessage({ tone: 'error', text });
             SillyTavern.toastr?.error?.(text);
         } finally {

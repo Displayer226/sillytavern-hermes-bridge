@@ -262,7 +262,7 @@ export default function VoiceCall({ open, onOpenChange, onActiveChange }) {
             checkAttempt();
             const ctx = liveContext();
             if (!chatId(ctx) || ctx.groupId) throw new Error('Open an individual chat with your agent.');
-            if (ctx.extensionSettings.responsesProxy?.isEnabled === false) throw new Error('Enable Responses Proxy in the extensions panel.');
+            if (ctx.extensionSettings.responsesProxy?.isEnabled === false) throw new Error('Enable Hermes Bridge in the extensions panel.');
             if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access requires an HTTPS SillyTavern connection.');
             if (ctx.streamingProcessor && !ctx.streamingProcessor.isFinished) throw new Error('Wait for the current response to finish.');
             const initialChat = String(chatId(ctx));

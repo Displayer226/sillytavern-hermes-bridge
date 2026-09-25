@@ -12,7 +12,7 @@ function getLiveContext(fallbackContext) {
             return SillyTavern.getContext();
         }
     } catch (error) {
-        console.warn('[Responses Proxy] Failed to refresh SillyTavern context:', error);
+        console.warn('[Hermes Bridge] Failed to refresh SillyTavern context:', error);
     }
     return fallbackContext;
 }
@@ -234,7 +234,7 @@ function updateCharacterJsonData(character, description) {
         character.json_data = JSON.stringify(jsonData);
         $('#character_json_data').val(character.json_data);
     } catch (error) {
-        console.warn('[Responses Proxy] Failed to sync character json_data after persona update:', error);
+        console.warn('[Hermes Bridge] Failed to sync character json_data after persona update:', error);
     }
 }
 
@@ -418,7 +418,7 @@ function PersonaPanel({ context, chatId, isOpen, onOpenChange }) {
                     allow_shrink: data.allow_shrink,
                 });
             } catch (error) {
-                console.warn('[Responses Proxy] Ignoring invalid persona patch request:', data, error);
+                console.warn('[Hermes Bridge] Ignoring invalid persona patch request:', data, error);
                 setMessage({ tone: 'error', text: error?.message || 'Invalid persona patch request' });
                 return;
             }

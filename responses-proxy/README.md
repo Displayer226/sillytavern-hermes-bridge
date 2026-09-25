@@ -1,6 +1,6 @@
-# Responses Proxy extension
+# Hermes Bridge extension
 
-A SillyTavern extension that sends stable chat metadata to the session proxy and displays responses in the current chat. The companion server and the tested local text-only setup are documented in the repository [Quick Start](../docs/public-docker-quickstart.md).
+The Hermes Bridge extension sends stable chat metadata to the session proxy and displays responses in the current chat. The session proxy server and the tested local text-only setup are documented in the repository [Quick Start](../docs/public-docker-quickstart.md).
 
 ## Build and tests
 

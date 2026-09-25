@@ -178,7 +178,7 @@ function readPosition(storageKey) {
         const value = JSON.parse(localStorage.getItem(storageKey) || 'null');
         if (Number.isFinite(value?.x) && Number.isFinite(value?.y)) return value;
     } catch (error) {
-        console.warn('[Responses Proxy] Could not restore floating button position:', error);
+        console.warn('[Hermes Bridge] Could not restore floating button position:', error);
     }
     return null;
 }
@@ -187,7 +187,7 @@ function savePosition(storageKey, position) {
     try {
         localStorage.setItem(storageKey, JSON.stringify(position));
     } catch (error) {
-        console.warn('[Responses Proxy] Could not save floating button position:', error);
+        console.warn('[Hermes Bridge] Could not save floating button position:', error);
     }
 }
 

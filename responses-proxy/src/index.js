@@ -38,7 +38,7 @@ function cleanupEventHandlers() {
             if (e instanceof TypeError || e instanceof ReferenceError || e instanceof SyntaxError) {
                 throw e; // Don't ignore critical errors
             }
-            console.warn('[Responses Proxy] Failed to remove event handler:', e);
+            console.warn('[Hermes Bridge] Failed to remove event handler:', e);
         }
     }
     _registeredHandlers.length = 0;
@@ -359,7 +359,7 @@ async function appendVisibleChatImages(generateData) {
             content.push({ type: 'image_url', image_url: { url: imageUrl, detail } });
             appended++;
         } catch (error) {
-            console.warn('[Responses Proxy] Failed to inline visible chat image:', error);
+            console.warn('[Hermes Bridge] Failed to inline visible chat image:', error);
         }
     }
     return appended;
@@ -394,7 +394,7 @@ function markHermesSwipeSyncNeeded(messageId) {
 
     if (mesId !== getLastAssistantMessageIndex()) {
         const text = 'Hermes sync only supports swiping the latest assistant reply.';
-        console.warn('[Responses Proxy]', text, { messageId: mesId });
+        console.warn('[Hermes Bridge]', text, { messageId: mesId });
         SillyTavern.toastr?.warning?.(text);
         return;
     }
@@ -410,7 +410,7 @@ function markHermesSwipeSyncNeeded(messageId) {
         swipeId,
         swipeCount: swipes.length,
     });
-    console.log('[Responses Proxy] Marked Hermes sync for selected SillyTavern swipe:', {
+    console.log('[Hermes Bridge] Marked Hermes sync for selected SillyTavern swipe:', {
         chatId,
         messageId: mesId,
         swipeId,
@@ -517,7 +517,7 @@ registerEventHandler(context.eventSource, context.eventTypes.CHAT_COMPLETION_SET
     // Get current chatId
     const chatId = getCurrentChatId();
     if (!chatId) {
-        console.warn('[Responses Proxy] No active chat ID found. Skipping metadata injection.');
+        console.warn('[Hermes Bridge] No active chat ID found. Skipping metadata injection.');
         return;
     }
     const hermesUndoReason = consumeHermesUndoBeforeSubmitReason(generate_data, chatId);
@@ -525,10 +525,10 @@ registerEventHandler(context.eventSource, context.eventTypes.CHAT_COMPLETION_SET
     try {
         const appendedImages = await appendVisibleChatImages(generate_data);
         if (appendedImages > 0) {
-            console.log('[Responses Proxy] Added visible chat images to request:', appendedImages);
+            console.log('[Hermes Bridge] Added visible chat images to request:', appendedImages);
         }
     } catch (e) {
-        console.warn('[Responses Proxy] Failed to add visible chat images to request:', e);
+        console.warn('[Hermes Bridge] Failed to add visible chat images to request:', e);
     }
 
     // Parse existing custom_include_body
@@ -540,7 +540,7 @@ registerEventHandler(context.eventSource, context.eventTypes.CHAT_COMPLETION_SET
         try {
             parsed = yaml.parse(customIncludeBody) || {};
         } catch (e) {
-            console.error('[Responses Proxy] Failed to parse custom_include_body as YAML', e);
+            console.error('[Hermes Bridge] Failed to parse custom_include_body as YAML', e);
         }
     }
 
@@ -555,7 +555,7 @@ registerEventHandler(context.eventSource, context.eventTypes.CHAT_COMPLETION_SET
 
     // Serialize back to YAML
     generate_data.custom_include_body = yaml.stringify(parsed);
-    console.log('[Responses Proxy] Injected metadata structure:', injected.metadata);
+    console.log('[Hermes Bridge] Injected metadata structure:', injected.metadata);
 });
 
 // When a chat is deleted in SillyTavern, notify the proxy to clean up session data.
@@ -564,7 +564,7 @@ function deleteProxySession(deletedChatId) {
     const sessionId = String(deletedChatId).replace(/\.jsonl$/i, '').trim();
     if (!sessionId) return;
 
-    console.log('[Responses Proxy] Chat deleted, cleaning up session:', sessionId);
+    console.log('[Hermes Bridge] Chat deleted, cleaning up session:', sessionId);
     // Send cleanup command via WS if connected, otherwise fire-and-forget HTTP
     if (wsService.isConnected) {
         wsService.send({ type: 'delete_session', session_id: sessionId });
@@ -585,7 +585,7 @@ function deleteProxySession(deletedChatId) {
                 })
                     .finally(() => clearTimeout(timer))
                     .catch((err) => {
-                        console.warn('[Responses Proxy] Failed to delete session via HTTP:', err);
+                        console.warn('[Hermes Bridge] Failed to delete session via HTTP:', err);
                     });
             }
         } catch (e) {
@@ -639,7 +639,7 @@ function mountToolCallsPanel() {
             panelRoot.render(<ToolCallsPanelRoot context={context} />);
         })
         .catch((error) => {
-            console.error('[Responses Proxy] Failed to load tool calls panel:', error);
+            console.error('[Hermes Bridge] Failed to load tool calls panel:', error);
         });
 }
 
