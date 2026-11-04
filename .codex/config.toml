@@ -1,0 +1,12 @@
+# Project defaults only. Keep account, provider, permissions and secrets in the
+# existing client configuration. The user may override the primary model in UI.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
+
+[agents]
+enabled = true
+# Allow the implementer and reviewer threads to remain open for follow-ups.
+# AGENTS.md limits active delegated work to one at a time, not two parallel jobs.
+max_concurrent_threads_per_session = 2
+default_subagent_model = "gpt-6.1-terra"
+default_subagent_reasoning_effort = "medium"
