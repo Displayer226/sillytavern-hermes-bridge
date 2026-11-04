@@ -3,6 +3,7 @@ import ToolCallsPanel from './ToolCallsPanel';
 import { WorkspaceProvider } from './components/WorkspaceContext';
 import ErrorBoundary from './ErrorBoundary';
 import VoiceCall from './VoiceCall';
+import HermesAuthBanner from './HermesAuthBanner';
 
 function ToolCallsPanelRoot({ context }) {
     const [voiceOpen, setVoiceOpen] = useState(false);
@@ -16,6 +17,7 @@ function ToolCallsPanelRoot({ context }) {
 
     return (
         <React.StrictMode>
+            <HermesAuthBanner context={context} />
             <WorkspaceProvider>
                 <ErrorBoundary>
                     <ToolCallsPanel

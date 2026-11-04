@@ -10,8 +10,9 @@
   },
   "scripts": {
     "build": "webpack --mode production",
-    "test:unit": "node tests/websocket-service.cjs && node tests/server-requests.cjs && node tests/hook-dependency-order.cjs && node tests/voice-model-contract.cjs",
-    "test:voice-browser": "node tests/voice-browser.cjs"
+    "test:unit": "node tests/websocket-service.cjs && node tests/server-requests.cjs && node tests/hook-dependency-order.cjs && node tests/voice-model-contract.cjs && node tests/hermes-auth-state.cjs",
+    "test:voice-browser": "node tests/voice-browser.cjs",
+    "test:auth-browser": "node tests/hermes-auth-browser.cjs && node tests/hermes-auth-states-browser.cjs && node tests/hermes-auth-root-browser.cjs"
   },
   "eslintConfig": {
     "extends": [
