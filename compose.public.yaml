@@ -1,12 +1,10 @@
 # Local text-only candidate for the public Phase 2 install.
-# Build contexts are the exact super-project submodule gitlinks.
+# Hermes builds from the local submodule checkout; verify it before building.
 services:
   hermes:
     build:
       context: ./hermes-agent
-      args:
-        HERMES_GIT_SHA: 5661709c997cb5557cc337fd428b44c598ab43ca
-    image: sillytavern-hermes/hermes-agent:5661709c
+    image: sillytavern-hermes/hermes-agent:94d26139
     restart: unless-stopped
     command: ["serve", "--host", "0.0.0.0"]
     environment:
@@ -46,7 +44,7 @@ services:
     restart: unless-stopped
     depends_on:
       hermes:
-        condition: service_healthy
+        condition: service_started
     environment:
       WS_TOKEN: ${WS_TOKEN:?Generate a proxy token and put it in .env.public}
       PROXY_WS_QUERY_TOKEN_COMPAT: "false"
@@ -78,7 +76,7 @@ services:
         - -c
         - >-
           import urllib.request;
-          urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)
+          urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=5)
       interval: 10s
       timeout: 7s
       retries: 12
@@ -114,7 +112,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -q -O /dev/null http://127.0.0.1:8080/health/ready || exit 1
+        - wget -q -O /dev/null http://127.0.0.1:8080/health/live || exit 1
       interval: 10s
       timeout: 5s
       retries: 12

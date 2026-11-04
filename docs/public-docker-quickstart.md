@@ -2,7 +2,7 @@
 
 This guide configures one local SillyTavern-to-Hermes text path. It uses the pinned Hermes source commit recorded in this repository, a local session proxy build, and the Hermes Bridge extension. The extension runs in SillyTavern; the session proxy is the local service that forwards requests to Hermes. The stack binds its only host port to loopback. The session proxy allows only Hermes's `default` profile in this path: it rejects explicit non-default selections sent through its HTTP or WebSocket APIs, and discards a saved non-default selection before restoring a session so the session uses `default`. It does not configure tools, a host workspace, voice, remote access, or multi-user use.
 
-**Validation status:** on 2026-09-25, the text-only conversation and session-proxy-only restart flow passed in a disposable VM using Docker Engine 29.8.1 and Compose 5.5.1. This run used a fresh local Git clone created from a local Git bundle, at super-project commit `97c73bd9639a42b1f0d80b82c9b77bdbfe9b67e3` with Hermes submodule `5661709c997cb5557cc337fd428b44c598ab43ca`. Anonymous Git access to the public repository has since been verified, but the complete Quick Start has not yet been rerun from an anonymous GitHub clone.
+**Validation status:** on 2026-09-25, the text-only conversation and session-proxy-only restart flow passed in a disposable VM using Docker Engine 29.8.1 and Compose 5.5.1. This run used a fresh local Git clone created from a local Git bundle, at super-project commit `97c73bd9639a42b1f0d80b82c9b77bdbfe9b67e3` with Hermes submodule `5661709c997cb5557cc337fd428b44c598ab43ca`. Anonymous Git access to the public repository has since been verified, but the complete Quick Start has not yet been rerun from an anonymous GitHub clone or validated with the current Hermes pin and local changes.
 
 ## Requirements
 
@@ -17,8 +17,11 @@ Clone the public repository and its pinned Hermes submodule:
 git clone --recurse-submodules https://github.com/Displayer226/sillytavern-hermes-bridge.git sillytavern-hermes-bridge
 cd sillytavern-hermes-bridge
 git -C hermes-agent rev-parse HEAD
-# Expected: 5661709c997cb5557cc337fd428b44c598ab43ca
+# Expected: 94d26139abf07b60a02771f82775639d55c18e2f
+python3 scripts/check-public-hermes-pin.py
 ```
+
+The check compares the recorded gitlink, checked-out commit, tracked and untracked changes, image tag, and this guide. It does not inspect ignored files. Compose builds from the local checkout; the image tag is a label, not a source pin. Use a clean clone without extra build-context files for a reproducible build. The Hermes Dockerfile does not consume a `HERMES_GIT_SHA` build argument.
 
 ## Configure credentials and provider
 
@@ -33,6 +36,8 @@ openssl rand -base64 24  # generate HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
 ```
 
 Set a private username and the three independently generated values in `.env.public`. Set `CORS_ORIGINS` to the exact browser origin used by SillyTavern, including scheme and port. Do not reuse the model-provider key for the session proxy token or Dashboard credentials. Keep `.env.public` outside version control.
+
+This stack fixes Hermes Dashboard and proxy authentication to password/basic. Browser OIDC is a separate advanced deployment described in [Hermes authentication](hermes-authentication.md); setting OIDC variables in `.env.public` does not enable it here.
 
 Run the preflight before any Compose command that starts a container. It reports missing, duplicate, or placeholder settings without printing their values.
 
@@ -76,6 +81,8 @@ docker compose --env-file .env.public -f compose.public.yaml up -d --wait hermes
 ```
 
 The Compose configuration sets `HERMES_PROFILE_ALLOWLIST=default`, pins the default TUI to the `context_engine` toolset, and disables registered toolsets. The session proxy enforces the profile restriction server-side, including API requests and restored session state. The authenticated schema probe creates a disposable default-profile session, waits for the completed agent build, requires `tools.show` to return zero schemas, and closes that session without submitting a prompt.
+
+Compose health checks for the proxy and ingress use `/health/live`, so the ingress can start while Hermes is unavailable. A healthy ingress only indicates that the proxy is responding; `/health/ready` still returns 503 until the Hermes WebSocket is ready. Check readiness separately before sending a conversation.
 
 ```sh
 docker compose --env-file .env.public -f compose.public.yaml run --rm --no-deps -T \

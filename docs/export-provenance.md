@@ -4,12 +4,18 @@ This repository is a curated public export. The source revision IDs below identi
 
 The proxy candidate `6a3fe191bd373a28e02772350ceb769f124ec796` and Compose candidate `3ed61261c7fe28cffe5b959ed8e1d8d81c825a6b` existed only in local source repositories. They were not published and are not publicly fetchable references. They document the inputs used to prepare this export; the initial commit of this export is the public reference for its contents.
 
-| Component | Source revision | How it is represented here |
+## Initial export inputs
+
+| Component | Source revision | How it was represented in the initial export |
 | --- | --- | --- |
 | Session proxy | `6a3fe191bd373a28e02772350ceb769f124ec796` | The profile allowlist changes are transposed into `proxy-ST/` as a targeted patch. Existing export README, `.dockerignore`, `.gitignore`, generic configuration, and other export changes remain in place. |
 | SillyTavern extension | `1055955db5d51c6d40b624ee9fbeb68a4008296a` | Extension behavior and tests use this source revision, with public-facing README and package/manifest metadata adapted for this export. |
-| Hermes Agent | `5661709c997cb5557cc337fd428b44c598ab43ca` | Kept as a true Git submodule at `hermes-agent/`, pinned to this exact commit; Compose uses the same revision for the Hermes image build argument. |
+| Hermes Agent | `5661709c997cb5557cc337fd428b44c598ab43ca` | Initial export submodule revision; this is the pin used in the historical Quick Start test. |
 | Public Compose profile pin | `3ed61261c7fe28cffe5b959ed8e1d8d81c825a6b` | The relevant `HERMES_PROFILE_ALLOWLIST=default` setting is applied to this export's `compose.public.yaml`; the source repository's submodule gitlink is replaced by the pinned public Hermes gitlink above. |
+
+## Current baseline
+
+The current Hermes gitlink is `94d26139abf07b60a02771f82775639d55c18e2f`. The local Compose image tag labels that revision; it does not select or verify the build source. Compose builds the local submodule checkout, and the Hermes Dockerfile does not consume `HERMES_GIT_SHA`. Run `python3 scripts/check-public-hermes-pin.py` before building to compare the gitlink, checkout, tag and Quick Start. The check detects tracked and untracked changes but not ignored build-context files. Use a clean clone for a reproducible build. The earlier Quick Start validation at `5661709c` is historical and does not validate this baseline or current local changes.
 
 ## Export adaptations
 
