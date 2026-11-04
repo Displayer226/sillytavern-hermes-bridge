@@ -51,6 +51,17 @@ assert.equal(withOverride.session_id, 'mobile-chat');
 
 const trimmed = snapshot(ctxTrim);
 assert.equal(trimmed.model, 'test-model', 'override must be trimmed');
+const labeled = sandboxCtx('');
+labeled.characters[0] = { description: 'CHAR {{name}}\nsecond line', personality: 'STYLE', scenario: 'SCENE' };
+labeled.powerUserSettings = { persona_description: 'USER {{name}}\nuser detail' };
+labeled.substituteParams = text => text.replace('{{name}}', 'substituted');
+const personaText = snapshot(labeled).messages[0].content;
+assert.match(personaText, /\[ASSISTANT character card\]/);
+assert.match(personaText, /\[USER persona\]/);
+for (const value of ['CHAR substituted\nsecond line', 'STYLE', 'SCENE', 'USER substituted\nuser detail']) {
+    assert.equal(personaText.split(value).length - 1, 1, 'each substituted field appears exactly once');
+}
+assert.ok(personaText.indexOf('USER substituted') > personaText.indexOf('[USER persona]'));
 
 const noOverride = snapshot(sandboxCtx(''));
 assert(!('model' in noOverride), 'empty override must omit the model field');

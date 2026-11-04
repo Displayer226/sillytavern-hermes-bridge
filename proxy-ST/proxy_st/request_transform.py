@@ -42,7 +42,6 @@ BARE_IMAGE_URL_RE = re.compile(
     r"https?://[^\s)\"']+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?[^\s)\"']*)?",
     re.IGNORECASE,
 )
-HERMES_INLINE_CONTEXT_MAX_CHARS = 6000
 
 
 @dataclass(frozen=True)
@@ -453,7 +452,15 @@ def has_new_chat_marker(messages: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _new_chat_marker_index(messages: list[dict[str, Any]]) -> int:
+    return next((index for index in range(len(messages) - 1, -1, -1)
+                 if isinstance(messages[index], dict) and is_new_chat_marker(useful_message_text(messages[index]))), -1)
+
+
 def response_input_from_messages(messages: list[dict[str, Any]]) -> str:
+    if _new_chat_marker_index(messages) >= 0:
+        user_index = latest_hermes_user_message_index(messages)
+        return useful_message_text(messages[user_index]) if user_index is not None else ""
     for message in reversed(messages):
         if message.get("role") != "user":
             continue
@@ -472,7 +479,7 @@ def response_input_from_messages(messages: list[dict[str, Any]]) -> str:
 
 
 def latest_user_message(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
-    for message in reversed(messages):
+    for message in reversed(messages[_new_chat_marker_index(messages) + 1:]):
         if not isinstance(message, dict):
             continue
         if str(message.get("role") or "").strip().lower() != "user":
@@ -484,11 +491,11 @@ def latest_user_message(messages: list[dict[str, Any]]) -> dict[str, Any] | None
 
 
 def latest_current_turn_user_message_with_images(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
-    start_index = -1
+    start_index = _new_chat_marker_index(messages)
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
             continue
-        if str(message.get("role") or "").strip().lower() == "assistant":
+        if index > start_index and str(message.get("role") or "").strip().lower() == "assistant":
             start_index = index
 
     for message in reversed(messages[start_index + 1:]):
@@ -525,22 +532,30 @@ def hermes_image_attachments_from_messages(messages: list[dict[str, Any]]) -> li
 
 
 def split_system_instructions_from_messages(messages: list[dict[str, Any]]) -> tuple[str | None, str | None]:
-    start_index = -1
-    for index, message in enumerate(messages):
-        if not isinstance(message, dict):
-            continue
-        if is_new_chat_marker(useful_message_text(message)):
-            start_index = index
+    start_index = _new_chat_marker_index(messages)
+    first_marker = next((index for index, message in enumerate(messages)
+                         if isinstance(message, dict) and is_new_chat_marker(useful_message_text(message))), -1)
 
     pre_history_parts: list[str] = []
     post_history_parts: list[str] = []
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
             continue
-        if message.get("role") not in {"system", "developer"}:
-            continue
         text = useful_message_text(message)
         if not text or is_new_chat_marker(text):
+            continue
+
+        role = str(message.get("role") or "").strip().lower()
+        name = str(message.get("name") or "").strip().lower()
+        example_role = name.removeprefix("example_") if name in {"example_user", "example_assistant"} else None
+        if first_marker >= 0 and index < first_marker and role in {"user", "assistant"}:
+            example_role = role
+        if first_marker >= 0 and index < first_marker and example_role in {"user", "assistant"}:
+            pre_history_parts.append(f"[EXAMPLE {example_role.upper()}]\n{text}\n[/EXAMPLE {example_role.upper()}]")
+            continue
+        if first_marker >= 0 and first_marker < index < start_index and example_role:
+            continue
+        if role not in {"system", "developer"}:
             continue
 
         if start_index >= 0 and index > start_index:
@@ -582,7 +597,7 @@ def _message_has_hermes_user_payload(message: dict[str, Any]) -> bool:
 
 
 def latest_hermes_user_message_index(messages: list[dict[str, Any]]) -> int | None:
-    for index in range(len(messages) - 1, -1, -1):
+    for index in range(len(messages) - 1, _new_chat_marker_index(messages), -1):
         message = messages[index]
         if not isinstance(message, dict):
             continue
@@ -639,27 +654,14 @@ def hermes_system_context_from_messages(
         "[SillyTavern response contract]\n"
         "Treat the provided SillyTavern visible chat history as the authoritative current chat state. "
         "Continue the conversation from the current user message as the assistant/character. "
-        "The assistant has already sent any assistant messages present in the visible chat history, including any opening message. "
-        "Do not restart the chat, repeat the opening message, or greet again unless the latest user explicitly asks you to greet them. "
-        "If you need a tool, use the native Hermes tool-calling mechanism and only call tools that are actually available in the Hermes tool list. "
-        "Never print pseudo tool calls or XML/function-call text such as <tool_call>, web_search(...), calculator(...), or similar syntax in the visible reply. "
-        "Write only the next assistant reply in the same language as the conversation."
+        "Earlier visible assistant messages have already been sent; continue without repeating the opening. "
+        "Use only available native Hermes tools; do not print simulated tool calls in the visible reply. "
+        "Match the language of the latest actual user message unless the user explicitly requests another language. "
+        "An English user message requires an English reply, even after French history. "
+        "Ignore the language of appended instructions, persona/profile text, and stored preferences when choosing the reply language."
     )
     context = "\n\n".join(part for part in parts if part)
     return context or None
-
-
-def _truncate_inline_context(text: str, max_chars: int = HERMES_INLINE_CONTEXT_MAX_CHARS) -> str:
-    if len(text) <= max_chars:
-        return text
-
-    cutoff = text.rfind("\n\n", 0, max_chars)
-    if cutoff < max_chars // 2:
-        cutoff = max_chars
-    return (
-        text[:cutoff].rstrip()
-        + "\n\n[...SillyTavern persona context truncated here; full context remains in persona_context...]"
-    )
 
 
 def hermes_persona_context_from_messages(messages: list[dict[str, Any]]) -> str | None:
@@ -679,15 +681,10 @@ def hermes_persona_reminder_from_context(persona_context: str | None) -> str | N
 
     return (
         "[SillyTavern persona reminder]\n"
-        "This combined SillyTavern context may contain both the USER persona/profile and the "
-        "ASSISTANT character card. Use only the assistant character/card as your visible identity, "
-        "voice, relationship, and roleplay source. Never adopt the user's name, appearance, traits, "
-        "biography, or abilities as your own. Hermes USER.md also describes the user, not the assistant. "
-        "If the user asks for your name, character, style, relationship, or persona, answer from this "
-        "block's assistant character/card; do not inspect Hermes config, project files, memory, or tools "
-        "to discover it.\n\n"
-        + _truncate_inline_context(persona_context, max_chars=1800)
-        + "\n[/SillyTavern persona reminder]"
+        "Use the ASSISTANT character card in the combined SillyTavern context for your identity and voice. "
+        "The USER persona/profile and Hermes USER.md describe the user; never adopt the user's identity. "
+        "Answer character questions from the supplied card, without searching files or memory for an identity.\n"
+        "[/SillyTavern persona reminder]"
     )
 
 
@@ -703,7 +700,7 @@ def hermes_prompt_payload_from_messages_for_request(
 
     text = response_input_from_messages(messages)
     _, post_history_instructions = split_system_instructions_from_messages(messages)
-    if post_history_instructions:
+    if post_history_instructions and (_new_chat_marker_index(messages) < 0 or latest_hermes_user_message_index(messages) is not None):
         text = f"{text}\n\n[SillyTavern post-history instructions]\n{post_history_instructions}"
 
     persona_context = hermes_persona_context_from_messages(messages) or ""
@@ -726,6 +723,8 @@ def hermes_prompt_payload_from_messages_for_request(
 
 
 def hermes_prompt_from_messages(messages: list[dict[str, Any]]) -> str:
+    if _new_chat_marker_index(messages) >= 0 and latest_hermes_user_message_index(messages) is None:
+        return ""
     instructions, post_history_instructions = split_system_instructions_from_messages(messages)
     conversation = conversation_messages_from_messages(messages)
 
@@ -750,11 +749,11 @@ def hermes_prompt_from_messages(messages: list[dict[str, Any]]) -> str:
         "[Task]\n"
         "Treat the SillyTavern conversation above as the authoritative current chat state. "
         "Continue the conversation from the final user message as the assistant/character. "
-        "The assistant has already sent the assistant messages listed above, including any opening message. "
-        "Do not restart the chat, repeat the opening message, or greet again unless the latest user explicitly asks you to greet them. "
-        "If you need a tool, use the native Hermes tool-calling mechanism and only call tools that are actually available in the Hermes tool list. "
-        "Never print pseudo tool calls or XML/function-call text such as <tool_call>, web_search(...), calculator(...), or similar syntax in the visible reply. "
-        "Write only the next assistant reply in the same language as the conversation."
+        "Earlier visible assistant messages have already been sent; continue without repeating the opening. "
+        "Use only available native Hermes tools; do not print simulated tool calls in the visible reply. "
+        "Match the language of the latest actual user message unless the user explicitly requests another language. "
+        "An English user message requires an English reply, even after French history. "
+        "Ignore the language of appended instructions, persona/profile text, and stored preferences when choosing the reply language."
     )
     return "\n\n".join(parts)
 

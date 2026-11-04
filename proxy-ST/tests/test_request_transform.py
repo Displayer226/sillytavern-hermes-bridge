@@ -186,9 +186,9 @@ def test_hermes_structured_payload_separates_instructions_history_and_user_text(
     assert payload.persona_version is not None
     assert payload.persona_reminder is not None
     assert "[SillyTavern persona reminder]" in payload.persona_reminder
-    assert "Stay in character." in payload.persona_reminder
-    assert "both the USER persona/profile and the ASSISTANT character card" in payload.persona_reminder
-    assert "Never adopt the user's name" in payload.persona_reminder
+    assert "Stay in character." not in payload.persona_reminder
+    assert "ASSISTANT character card" in payload.persona_reminder
+    assert "never adopt the user's identity" in payload.persona_reminder
 
 
 def test_hermes_structured_payload_uses_delta_for_active_session() -> None:
@@ -210,7 +210,7 @@ def test_hermes_structured_payload_uses_delta_for_active_session() -> None:
     assert "Stay in character." not in payload.system_context
     assert payload.persona_context == "Stay in character."
     assert payload.persona_reminder is not None
-    assert "Stay in character." in payload.persona_reminder
+    assert "Stay in character." not in payload.persona_reminder
 
 
 def test_hermes_structured_payload_sends_empty_persona_clear() -> None:
@@ -258,3 +258,127 @@ def test_hermes_selected_swipe_prompt_keeps_authoritative_context() -> None:
     assert "[SillyTavern conversation so far]" in prompt
     assert "selected branch reply" in prompt
     assert "next after branch" in prompt
+
+
+def test_reply_language_uses_current_user_turn_despite_english_post_history() -> None:
+    messages = [
+        {"role": "system", "content": "Character: helpful. User profile: French speaker."},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "Salut"},
+        {"role": "assistant", "content": "Bonjour !"},
+        {"role": "user", "content": "Hello what's up"},
+        {"role": "system", "content": "Answer the latest request in character."},
+    ]
+    for active in (False, True):
+        payload = hermes_prompt_payload_from_messages_for_request(messages, active_session=active)
+        assert payload.text.startswith("Hello what's up\n\n[SillyTavern post-history instructions]")
+        assert "Answer the latest request in character." in payload.text
+        assert "Answer the latest request in character." not in payload.persona_context
+        assert "latest actual user message" in payload.system_context
+        assert "even after French history" in payload.system_context
+    assert "latest actual user message" in hermes_prompt_from_messages(messages)
+
+
+def test_persona_reminder_does_not_duplicate_large_context() -> None:
+    context = "Character card: helpful. " + "Large world info. " * 1000
+    payload = hermes_prompt_payload_from_messages_for_request([
+        {"role": "system", "content": context},
+        {"role": "user", "content": "Hi"},
+    ])
+    assert payload.persona_context == context.strip()
+    assert len(payload.persona_reminder) < 500
+    assert "Large world info." not in payload.persona_reminder
+
+
+def test_pre_marker_examples_are_labeled_stable_persona_context() -> None:
+    messages = [
+        {"role": "system", "content": "Character card"},
+        {"role": "user", "content": "example question"},
+        {"role": "assistant", "content": "example answer"},
+        {"role": "system", "name": "example_user", "content": "named question"},
+        {"role": "system", "name": "example_assistant", "content": "named answer"},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "real earlier"},
+        {"role": "assistant", "content": "real reply"},
+        {"role": "user", "content": "real current"},
+    ]
+    fresh = hermes_prompt_payload_from_messages_for_request(messages)
+    active = hermes_prompt_payload_from_messages_for_request(messages, active_session=True)
+    assert fresh.persona_context == active.persona_context
+    assert fresh.persona_context is not None
+    for label, content in [("EXAMPLE USER", "example question"), ("EXAMPLE ASSISTANT", "example answer"),
+                           ("EXAMPLE USER", "named question"), ("EXAMPLE ASSISTANT", "named answer")]:
+        assert f"[{label}]\n{content}" in fresh.persona_context
+        assert fresh.persona_context.count(content) == 1
+        assert content not in str(fresh.conversation_history)
+        assert content not in fresh.text
+    assert fresh.conversation_history == [
+        {"role": "user", "content": "real earlier"}, {"role": "assistant", "content": "real reply"},
+    ]
+    assert active.conversation_history is None
+    assert fresh.text == active.text == "real current"
+    changed = [dict(message) for message in messages]
+    changed[1]["content"] = "changed example"
+    assert hermes_prompt_payload_from_messages_for_request(changed).persona_version != fresh.persona_version
+
+
+def test_marker_without_real_user_never_submits_example_greeting_or_post_instruction() -> None:
+    messages = [
+        {"role": "user", "content": [{"type": "text", "text": "example"},
+                                      {"type": "image_url", "image_url": {"url": "data:image/png;base64,YQ=="}}]},
+        {"role": "assistant", "content": "example answer"},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "assistant", "content": "greeting"},
+        {"role": "system", "content": "post instruction"},
+    ]
+    for active in (False, True):
+        payload = hermes_prompt_payload_from_messages_for_request(messages, active_session=active)
+        assert payload.text == ""
+        assert hermes_image_attachments_from_messages(messages) == []
+
+
+def test_marker_current_user_and_images_exclude_examples_and_keep_swipe() -> None:
+    messages = [
+        {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,YQ=="}}]},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "actual"},
+        {"role": "assistant", "content": "swiped reply"},
+    ]
+    payload = hermes_prompt_payload_from_messages_for_request(messages, sync_reason="swipe", active_session=True)
+    assert payload.text == "actual"
+    assert hermes_image_attachments_from_messages(messages) == []
+
+
+def test_no_marker_preserves_legacy_assistant_fallback() -> None:
+    payload = hermes_prompt_payload_from_messages_for_request([
+        {"role": "system", "content": "instruction"}, {"role": "assistant", "content": "legacy greeting"},
+    ])
+    assert payload.text == "legacy greeting"
+    assert payload.persona_context == "instruction"
+
+
+def test_multiple_markers_keep_only_first_area_examples_and_last_conversation() -> None:
+    messages = [
+        {"role": "user", "content": "genuine example user"},
+        {"role": "assistant", "content": "genuine example assistant"},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "old actual user"},
+        {"role": "assistant", "content": "old actual assistant"},
+        {"role": "system", "name": "example_user", "content": "old named user"},
+        {"role": "system", "name": "example_assistant", "content": "old named assistant"},
+        {"role": "system", "content": "ordinary system instruction"},
+        {"role": "system", "content": "[Start a new chat]"},
+        {"role": "user", "content": "new current user"},
+    ]
+    for active in (False, True):
+        payload = hermes_prompt_payload_from_messages_for_request(messages, active_session=active)
+        assert payload.persona_context is not None
+        assert "[EXAMPLE USER]\ngenuine example user" in payload.persona_context
+        assert "[EXAMPLE ASSISTANT]\ngenuine example assistant" in payload.persona_context
+        assert "ordinary system instruction" in payload.persona_context
+        for old in ("old actual user", "old actual assistant", "old named user", "old named assistant"):
+            assert old not in payload.persona_context
+            assert old not in str(payload.conversation_history)
+            assert old not in payload.text
+        assert payload.conversation_history is None
+        assert payload.text == "new current user"

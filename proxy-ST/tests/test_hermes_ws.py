@@ -15,6 +15,7 @@ from proxy_st.hermes_ws import (
     HermesWebSocketManager,
     _persona_patch_request_from_payload,
 )
+from proxy_st.request_transform import hermes_prompt_payload_from_messages_for_request
 from proxy_st.state import SESSION_INFOS
 
 
@@ -688,7 +689,18 @@ def test_reconnect_lost_mapping_rebuilds_with_full_context_and_routing(monkeypat
     monkeypatch.setattr(manager, "_send_json_rpc", fake_send)
     monkeypatch.setattr(manager, "_persist_session_info", lambda _session: None)
 
+    payload = hermes_prompt_payload_from_messages_for_request([
+        {"role": "system", "name": "example_user", "content": "example question"},
+        {"role": "assistant", "content": "example answer"},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "earlier"}, {"role": "assistant", "content": "reply"},
+        {"role": "user", "content": "current"},
+    ])
     history = [{"role": "user", "content": "earlier"}, {"role": "assistant", "content": "reply"}]
+    assert payload.conversation_history == history
+    assert payload.text == "current"
+    assert "[EXAMPLE USER]\nexample question" in payload.persona_context
+    assert "[EXAMPLE ASSISTANT]\nexample answer" in payload.persona_context
     result = asyncio.run(manager.ensure_session(
         "chat-1",
         cwd="/workspace",
@@ -696,9 +708,9 @@ def test_reconnect_lost_mapping_rebuilds_with_full_context_and_routing(monkeypat
         model="new-model",
         messages=history,
         system_context="system",
-        persona_context="persona",
+        persona_context=payload.persona_context,
         persona_reminder="reminder",
-        persona_version="v2",
+        persona_version=payload.persona_version,
     ))
 
     assert result == "tui-rebuilt"
@@ -713,9 +725,9 @@ def test_reconnect_lost_mapping_rebuilds_with_full_context_and_routing(monkeypat
             "model": "new-model",
             "messages": history,
             "system_context": "system",
-            "persona_context": "persona",
+            "persona_context": payload.persona_context,
             "persona_reminder": "reminder",
-            "persona_version": "v2",
+            "persona_version": payload.persona_version,
         },
     }
     assert manager._pending_requests == {}
@@ -1409,6 +1421,55 @@ def test_ensure_session_creates_with_native_history_and_stable_context(monkeypat
         "value": "gemma4-26b",
         "unchanged": True,
     }
+
+
+def test_changed_example_rebuilds_mapping_with_new_stable_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = HermesWebSocketManager()
+    manager._should_connect = True
+    manager._ready = True
+    created: list[dict[str, Any]] = []
+    closed: list[str] = []
+
+    async def fake_send(request_id: int, method: str, params: dict[str, Any]) -> None:
+        assert method == "session.create"
+        created.append(params)
+        pending_key = next(iter(manager._pending_creations))
+        session = manager._sessions.pop(pending_key)
+        session.tui_session_id = f"tui-{len(created)}"
+        manager._sessions[session.tui_session_id] = session
+        manager._st_to_tui["chat-1"] = session.tui_session_id
+        manager._pending_creations.pop(pending_key)
+        manager._pending_requests.pop(request_id)
+        manager._creation_waiters["chat-1"].set_result(session.tui_session_id)
+
+    async def fake_close(st_session_id: str) -> None:
+        closed.append(st_session_id)
+        manager._sessions.pop(manager._st_to_tui.pop(st_session_id))
+
+    monkeypatch.setattr(manager, "_send_json_rpc", fake_send)
+    monkeypatch.setattr(manager, "close_session", fake_close)
+    monkeypatch.setattr(manager, "_configure_tool_progress_mode", lambda _session: asyncio.sleep(0))
+    messages = [
+        {"role": "user", "content": "first example"}, {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "earlier"}, {"role": "assistant", "content": "reply"},
+        {"role": "user", "content": "current"},
+    ]
+    first = hermes_prompt_payload_from_messages_for_request(messages)
+    messages[0]["content"] = "changed example"
+    second = hermes_prompt_payload_from_messages_for_request(messages)
+
+    async def run() -> None:
+        for payload in (first, second):
+            await manager.ensure_session("chat-1", messages=payload.conversation_history,
+                                         system_context=payload.system_context, persona_context=payload.persona_context,
+                                         persona_reminder=payload.persona_reminder, persona_version=payload.persona_version)
+    asyncio.run(run())
+    assert closed == ["chat-1"]
+    assert len(created) == 2
+    assert first.persona_version != second.persona_version
+    assert created[1]["persona_context"] == second.persona_context
+    assert created[1]["messages"] == [{"role": "user", "content": "earlier"}, {"role": "assistant", "content": "reply"}]
+    assert second.text == "current"
 
 
 def test_persona_patch_request_from_payload() -> None:

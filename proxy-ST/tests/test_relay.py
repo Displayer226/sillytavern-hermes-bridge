@@ -36,6 +36,60 @@ def test_only_hermes_runtime_backend_is_configured(monkeypatch: Any) -> None:
     assert configured_backend_name("unknown") == "hermes"
 
 
+@pytest.mark.parametrize("active", [False, True])
+def test_relay_routes_examples_and_recovery_history_without_replaying_current(
+    monkeypatch: pytest.MonkeyPatch, active: bool,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    class Manager:
+        is_connected = True
+
+        def has_prompt_history(self, _session_id: str) -> bool:
+            return active
+
+        async def submit_prompt(self, _session_id: str, text: str, attachments: list[Any], **kwargs: Any):
+            captured.update(text=text, attachments=attachments, **kwargs)
+            yield {"type": "done", "status": "complete"}
+
+    monkeypatch.setattr(relay, "workspace_cwd_for_selection", lambda _selection: None)
+    async def broadcast(*_args: Any, **_kwargs: Any) -> None:
+        pass
+    monkeypatch.setattr(relay, "ws_broadcast", broadcast)
+    messages = [
+        {"role": "user", "content": "example question"},
+        {"role": "assistant", "content": "example answer"},
+        {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "user", "content": "earlier"},
+        {"role": "assistant", "content": "reply"},
+        {"role": "user", "content": "current"},
+    ]
+    async def run() -> None:
+        response = await relay.forward_hermes_streaming({"messages": messages}, "synthetic-chat", Manager())
+        async for _chunk in response.body_iterator:
+            pass
+    asyncio.run(run())
+    assert captured["text"] == "current"
+    assert captured["conversation_history"] == [
+        {"role": "user", "content": "earlier"}, {"role": "assistant", "content": "reply"},
+    ]
+    assert "[EXAMPLE USER]\nexample question" in captured["persona_context"]
+    assert "[EXAMPLE ASSISTANT]\nexample answer" in captured["persona_context"]
+    assert captured["persona_version"]
+
+
+def test_relay_rejects_marker_without_real_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Manager:
+        is_connected = True
+    monkeypatch.setattr(relay, "workspace_cwd_for_selection", lambda _selection: None)
+    response = asyncio.run(relay.forward_hermes_streaming({"messages": [
+        {"role": "user", "content": "example"}, {"role": "system", "content": "[Start a new Chat]"},
+        {"role": "assistant", "content": "greeting"}, {"role": "system", "content": "instruction"},
+    ]}, "synthetic-chat", Manager()))
+    assert response.status_code == 400
+    assert b"empty_message" in response.body
+
+
 def test_unsupported_backend_request_is_rejected() -> None:
     entry = {"request_id": "req-1", "summary": {"backend": "unsupported"}}
     response = asyncio.run(relay.forward_to_backend(entry, {}, None))
@@ -145,13 +199,11 @@ def test_sillytavern_integration_context_disambiguates_participants() -> None:
     assert "not memory or skill updates" in context
     assert 'operation="append"' in context
     assert 'operation="replace"' in context
-    assert "not callable through Python globals" in context
-    assert "Do not claim the native tool does not exist based on CLI or terminal output" in context
-    assert "stale guidance" in context
-    assert "native tool call first" in context
-    assert "Fallback path only after a direct native tool call" in context
-    assert "http://127.0.0.1:8010/mcp" in context
-    assert "Do not use `hermes tools` or `hermes mcp call`" in context
+    assert "If `mcp_sillytavern_sillytavern_update_persona_description` is available" in context
+    assert "pending proposal from an applied update" in context
+    assert "If the tool is absent or fails" in context
+    assert "http://127.0.0.1:8010/mcp" not in context
+    assert "is registered for this session" not in context
 
 
 def test_sillytavern_integration_context_explains_docker_workspace_mapping() -> None:

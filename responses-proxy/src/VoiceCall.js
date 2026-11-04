@@ -163,8 +163,12 @@ function snapshot(ctx) {
     const id = chatId(ctx);
     const character = ctx.characters?.[ctx.characterId];
     const substitute = (text) => ctx.substituteParams?.(text) || text;
-    const persona = [character?.description, character?.personality, character?.scenario,
-        ctx.powerUserSettings?.persona_description].filter(Boolean).map(substitute).join('\n\n');
+    const card = [['Description', character?.description], ['Personality', character?.personality],
+        ['Scenario', character?.scenario]].filter(([, value]) => value)
+        .map(([label, value]) => `${label}:\n${substitute(value)}`).join('\n\n');
+    const userPersona = ctx.powerUserSettings?.persona_description;
+    const persona = [card && `[ASSISTANT character card]\n${card}\n[/ASSISTANT character card]`,
+        userPersona && `[USER persona]\n${substitute(userPersona)}\n[/USER persona]`].filter(Boolean).join('\n\n');
     const selectedModel = typeof settings.selectedModel === 'string' ? settings.selectedModel.trim() : '';
     // Same contract as text requests (index.js): with no model override the
     // field is omitted and the call inherits the backend's current model.

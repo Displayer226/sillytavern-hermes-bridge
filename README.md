@@ -6,6 +6,8 @@ The supported path in this Quick Start is **text-only** and **Hermes Agent only*
 
 Start with the [Public Docker Quick Start](docs/public-docker-quickstart.md). See [Architecture](docs/architecture.md) for the local request path.
 
+For existing deployments with an OIDC dashboard, see [browser sign-in and validation](docs/hermes-authentication.md). This is separate from the local Quick Start.
+
 See [Component provenance](docs/export-provenance.md) for the source revisions and export-specific adaptations.
 
 See [Support](SUPPORT.md) for the supported setup and [Security](SECURITY.md) for vulnerability reporting and token handling.
@@ -15,3 +17,7 @@ This is a self-hosted integration, not a hosted service. Do not expose the proxy
 ## License
 
 The bridge-owned code and documentation in this repository, including `proxy-ST/` and `responses-proxy/`, are licensed under **AGPL-3.0-only**; see [LICENSE](LICENSE). The pinned `hermes-agent/` submodule is a separate project under its own MIT license. Third-party dependencies retain their respective licenses.
+
+## Assistant prompts
+
+Import the [shared semi-RP preset](presets/SillyTavern%20Hermes%20-%20Semi-RP.json) for a characterful assistant that uses the current user's language. See [prompt setup and responsibilities](docs/assistant-prompts.md) for the three prompt slots and how the bridge delivers them to Hermes.
