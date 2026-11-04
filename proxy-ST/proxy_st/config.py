@@ -169,6 +169,7 @@ SESSION_HEADER_CANDIDATES = (
 
 # URL query parameters redacted from logs (access logs and request logs).
 SENSITIVE_QUERY_PARAMS = {
+    "code", "state", "nonce", "code_verifier",
     "token",
     "access_token",
     "api_key",
@@ -209,8 +210,9 @@ BACKEND_CONFIGS = {
 }
 
 HERMES_DASHBOARD_URL = os.getenv("HERMES_DASHBOARD_URL", "http://localhost:9119/")
+HERMES_DASHBOARD_OIDC_TOKEN_FILE = os.getenv("HERMES_DASHBOARD_OIDC_TOKEN_FILE", "/app/data/hermes-oidc.json").strip()
 HERMES_DASHBOARD_AUTH_MODE = os.getenv("HERMES_DASHBOARD_AUTH_MODE", "auto").strip().lower()
-if HERMES_DASHBOARD_AUTH_MODE not in {"auto", "password", "legacy", "none", "off"}:
+if HERMES_DASHBOARD_AUTH_MODE not in {"auto", "password", "oidc", "legacy", "none", "off"}:
     HERMES_DASHBOARD_AUTH_MODE = "auto"
 HERMES_DASHBOARD_AUTH_PROVIDER = os.getenv("HERMES_DASHBOARD_AUTH_PROVIDER", "basic").strip() or "basic"
 HERMES_DASHBOARD_AUTH_USERNAME = (

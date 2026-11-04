@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional
@@ -314,6 +315,7 @@ class HermesWebSocketManager:
         dashboard_auth_username: str = "",
         dashboard_auth_password: str = "",
         dashboard_auth_timeout: float = 5.0,
+        dashboard_oidc_token_file: str = "",
         dashboard_authenticator: HermesDashboardAuthenticator | None = None,
     ):
         self.ws_url = ws_url
@@ -325,13 +327,18 @@ class HermesWebSocketManager:
             password=dashboard_auth_password,
         )
         self.dashboard_auth_timeout = dashboard_auth_timeout
+        self.dashboard_oidc_token_file = dashboard_oidc_token_file
         self._dashboard_authenticator = dashboard_authenticator
+        self.auth_login_required = False
+        self.auth_retry_after = 0.0
+        self.auth_retry_at = 0.0
+        self._auth_changed = asyncio.Event()
         self._session_token: Optional[str] = None
         self._ws: Optional[Any] = None
         self._should_connect = False
         self._ready = False
         self._reconnect_delay = 1.0
-        self._max_reconnect_delay = 30.0
+        self._max_reconnect_delay = 300.0
         self._reconnect_task: Optional[asyncio.Task] = None
         self._listen_task: Optional[asyncio.Task] = None
         self._global_id = 0
@@ -358,16 +365,14 @@ class HermesWebSocketManager:
         self._on_text: list[Callable] = []
 
         logger.info(
-            "HermesWebSocketManager initialized url=%s dashboard=%s auth_mode=%s",
-            ws_url,
-            dashboard_url,
+            "HermesWebSocketManager initialized auth_mode=%s",
             self.dashboard_auth_mode,
         )
 
     @staticmethod
     def _normalize_dashboard_auth_mode(value: str) -> str:
         mode = (value or "auto").strip().lower()
-        if mode not in {"auto", "password", "legacy", "none", "off"}:
+        if mode not in {"auto", "password", "oidc", "legacy", "none", "off"}:
             return "auto"
         return mode
 
@@ -431,65 +436,132 @@ class HermesWebSocketManager:
         if self._server_request_restore_task:
             self._server_request_restore_task.cancel()
             self._server_request_restore_task = None
-        if self._reconnect_task:
-            self._reconnect_task.cancel()
-            self._reconnect_task = None
-        if self._listen_task:
-            self._listen_task.cancel()
-            self._listen_task = None
-        if self._ws:
+        reconnect_task, listen_task, ws = self._reconnect_task, self._listen_task, self._ws
+        self._reconnect_task = None
+        self._listen_task = None
+        if reconnect_task:
+            reconnect_task.cancel()
+            await asyncio.gather(reconnect_task, return_exceptions=True)
+        if listen_task and not listen_task.done():
+            listen_task.cancel()
+            await asyncio.gather(listen_task, return_exceptions=True)
+        if ws:
             try:
-                await self._ws.close()
+                await ws.close()
             except Exception:
                 pass
+        if self._ws is ws:
             self._ws = None
         if self._dashboard_authenticator:
             await self._dashboard_authenticator.close()
             self._dashboard_authenticator = None
         logger.info("HermesWebSocketManager stopped")
 
+    async def _wait_for_auth(self, delay: float) -> None:
+        try:
+            await asyncio.wait_for(self._auth_changed.wait(), timeout=delay)
+        except asyncio.TimeoutError:
+            pass
+        self._auth_changed.clear()
+
+    async def _wait_for_login(self) -> None:
+        from pathlib import Path
+        from .hermes_oidc import load_tokens
+
+        # Browser sign-in wakes us immediately; the local check also notices CLI
+        # sign-in. Rejected credentials remain rejected across process restarts.
+        while self._should_connect and self.auth_login_required:
+            await self._wait_for_auth(5.0)
+            try:
+                load_tokens(Path(self.dashboard_oidc_token_file), self.dashboard_url)
+            except DashboardAuthError:
+                continue
+            self.auth_login_required = False
+
     async def _reconnect_loop(self) -> None:
-        """Reconnect with exponential backoff."""
+        """Retry transient failures; wait for new credentials after expiration."""
         delay = self._reconnect_delay
         while self._should_connect:
             try:
+                self.auth_retry_after = 0.0
+                self.auth_retry_at = 0.0
                 await self._do_connect_and_wait()
-                delay = self._reconnect_delay  # Reset on success
+                delay = self._reconnect_delay
             except asyncio.CancelledError:
                 return
-            except Exception as exc:
-                if self._should_connect:  # Only log if we're still trying
-                    logger.warning("Hermes connection failed: %s — retrying in %.1fs", exc, delay)
-                await asyncio.sleep(delay)
+            except Exception:
+                if self.auth_login_required:
+                    logger.warning("Hermes sign-in required; automatic authentication attempts suspended")
+                    await self._wait_for_login()
+                    delay = self._reconnect_delay
+                    continue
+                wait = max(delay, self.auth_retry_after)
+                self.auth_retry_at = time.time() + wait
+                if self._should_connect:
+                    logger.warning("Hermes connection failed — retrying in %.1fs", wait)
+                await self._wait_for_auth(wait)
                 delay = min(delay * 2, self._max_reconnect_delay)
 
-    async def _fetch_ws_ticket(self) -> str:
+    def _ensure_dashboard_authenticator(self) -> HermesDashboardAuthenticator:
         if self._dashboard_authenticator is None:
             self._dashboard_authenticator = HermesDashboardAuthenticator(
                 self.dashboard_url,
                 auth=self.dashboard_auth,
                 timeout=self.dashboard_auth_timeout,
             )
-        return await self._dashboard_authenticator.fetch_ws_ticket()
+        if isinstance(self._dashboard_authenticator, HermesDashboardAuthenticator):
+            self._dashboard_authenticator.oidc_token_file = (
+                self.dashboard_oidc_token_file
+                if self.dashboard_auth_mode == "oidc" or (self.dashboard_auth_mode == "auto" and self._has_oidc_session())
+                else ""
+            )
+        return self._dashboard_authenticator
+
+    async def _fetch_ws_ticket(self) -> str:
+        return await self._ensure_dashboard_authenticator().fetch_ws_ticket()
+
+    async def store_oidc_session(self, tokens: dict) -> None:
+        if not self.dashboard_oidc_token_file:
+            raise DashboardAuthError("Hermes OIDC token file is not configured")
+        await self._ensure_dashboard_authenticator().store_oidc_session(tokens, self.dashboard_oidc_token_file)
+        self.auth_login_required = False
+        self.auth_retry_after = 0.0
+        self.auth_retry_at = 0.0
+        self._auth_changed.set()
+
+    def _has_oidc_session(self) -> bool:
+        from pathlib import Path
+
+        return bool(self.dashboard_oidc_token_file and Path(self.dashboard_oidc_token_file).is_file())
 
     async def _authenticated_ws_url(self) -> str:
         ws_url = self.ws_url
+        if self.dashboard_auth_mode == "oidc" and not self.dashboard_url:
+            raise ConnectionError("Hermes OIDC dashboard URL is not configured")
         if not self.dashboard_url or self.dashboard_auth_mode in {"none", "off"}:
             return ws_url
 
-        if self.dashboard_auth_mode == "password" or (
+        use_oidc = self.dashboard_auth_mode == "oidc" or (self.dashboard_auth_mode == "auto" and self._has_oidc_session())
+        if use_oidc and not self.dashboard_oidc_token_file:
+            self.auth_login_required = True
+            raise ConnectionError("Hermes OIDC token file is not configured")
+        if use_oidc or self.dashboard_auth_mode == "password" or (
             self.dashboard_auth_mode == "auto" and self.dashboard_auth.is_configured
         ):
             try:
                 ticket = await self._fetch_ws_ticket()
             except DashboardAuthError as exc:
-                if self.dashboard_auth_mode == "password":
+                from .hermes_oidc import OIDCLoginRequired
+                self.auth_login_required = isinstance(exc, OIDCLoginRequired)
+                self.auth_retry_after = exc.retry_after
+                if use_oidc or self.dashboard_auth_mode == "password":
                     raise ConnectionError(f"Unable to obtain a Hermes WebSocket ticket: {exc}") from exc
                 logger.warning(
                     "Hermes WebSocket ticket unavailable (%s); falling back to legacy HTML token",
                     exc,
                 )
             else:
+                self.auth_login_required = False
                 self._session_token = None
                 return _append_ws_credential(ws_url, "ticket", ticket)
 
@@ -505,8 +577,7 @@ class HermesWebSocketManager:
         """Establish the WebSocket connection and start its listener."""
         ws_url = await self._authenticated_ws_url()
 
-        safe_ws_url = _redact_ws_credentials(ws_url)
-        logger.info("Connecting to Hermes tui_gateway: %s", safe_ws_url)
+        logger.info("Connecting to Hermes tui_gateway")
         self._ws = await websockets.connect(
             ws_url,
             ping_interval=20,

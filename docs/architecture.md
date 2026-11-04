@@ -16,3 +16,11 @@ SillyTavern + Hermes Bridge extension
 ```
 
 The Quick Start uses named state volumes and the default Hermes profile. It publishes no Hermes or session proxy port, mounts no host workspace, and passes no Docker socket. The default-profile probe verifies that the newly built session exposes no tool schemas.
+
+## Hermes dashboard authentication
+
+The proxy supports password and OIDC authentication. OIDC authorization can
+start from the extension's **Connecter Hermes** button; tokens remain on the
+proxy and renew independently of the browser session. See
+[Hermes browser sign-in](hermes-authentication.md) for the flow, operational
+requirements and confirmed validation scope.

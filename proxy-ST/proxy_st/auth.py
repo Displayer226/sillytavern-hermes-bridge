@@ -3,7 +3,7 @@ import secrets
 from fastapi import Request
 
 
-PUBLIC_HTTP_PATHS = {"/health", "/health/live", "/health/ready", "/metrics"}
+PUBLIC_HTTP_PATHS = {"/health", "/health/live", "/health/ready", "/metrics", "/hermes-auth/callback"}
 
 
 def is_public_http_path(path: str) -> bool:

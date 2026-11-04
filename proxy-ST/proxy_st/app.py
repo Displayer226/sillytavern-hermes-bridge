@@ -20,6 +20,7 @@ from .config import (
     CORS_ORIGINS,
     DEFAULT_BACKEND,
     HERMES_DASHBOARD_AUTH_MODE,
+    HERMES_DASHBOARD_OIDC_TOKEN_FILE,
     HERMES_DASHBOARD_AUTH_PASSWORD,
     HERMES_DASHBOARD_AUTH_PROVIDER,
     HERMES_DASHBOARD_AUTH_TIMEOUT_SECONDS,
@@ -33,6 +34,7 @@ from .config import (
     WS_TOKEN,
 )
 from .dummy import chat_completion_response, stream_response
+from .hermes_web_auth import BrowserOIDC, WebOIDCSettings, web_auth_router
 from .hermes_ws import HermesWebSocketManager
 from .health import process_metrics, prometheus_metrics, readiness_snapshot
 from .log import logger, reset_request_id, set_request_id
@@ -61,6 +63,7 @@ hermes_ws_manager = HermesWebSocketManager(
     ws_url=BACKEND_CONFIGS["hermes"]["ws_url"],
     dashboard_url=HERMES_DASHBOARD_URL,
     dashboard_auth_mode=HERMES_DASHBOARD_AUTH_MODE,
+    dashboard_oidc_token_file=HERMES_DASHBOARD_OIDC_TOKEN_FILE,
     dashboard_auth_provider=HERMES_DASHBOARD_AUTH_PROVIDER,
     dashboard_auth_username=HERMES_DASHBOARD_AUTH_USERNAME,
     dashboard_auth_password=HERMES_DASHBOARD_AUTH_PASSWORD,
@@ -84,6 +87,16 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="SillyTavern Session Proxy", version="0.1.0", lifespan=_lifespan)
 app.include_router(voice_router)
+web_oidc = BrowserOIDC(WebOIDCSettings.from_env(), HERMES_DASHBOARD_URL, hermes_ws_manager.store_oidc_session)
+if web_oidc.settings.enabled and not WS_TOKEN:
+    raise ValueError("Browser OIDC login requires WS_TOKEN to protect the shared Hermes connection")
+app.include_router(web_auth_router(web_oidc, lambda: {
+    "connected": hermes_ws_manager.is_connected,
+    "ready": hermes_ws_manager.is_ready,
+    "session_expired": hermes_ws_manager.auth_login_required and hermes_ws_manager._has_oidc_session(),
+    "retry_at": hermes_ws_manager.auth_retry_at or None,
+    "login_required": not hermes_ws_manager.is_connected and hermes_ws_manager.auth_login_required,
+}))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
