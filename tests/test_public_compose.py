@@ -16,7 +16,8 @@ def command(*args):
         return subprocess.run(
             args, cwd=ROOT, check=True, text=True, capture_output=True,
             env={"PATH": os.environ.get("PATH", os.defpath), "HOME": home,
-                 "PYTHONDONTWRITEBYTECODE": "1"},
+                 "PYTHONDONTWRITEBYTECODE": "1",
+                 **({"GIT_INDEX_FILE": os.environ["GIT_INDEX_FILE"]} if "GIT_INDEX_FILE" in os.environ else {})},
         )
 
 

@@ -15,7 +15,15 @@ The proxy candidate `6a3fe191bd373a28e02772350ceb769f124ec796` and Compose candi
 
 ## Current baseline
 
-The current Hermes gitlink is `94d26139abf07b60a02771f82775639d55c18e2f`. The local Compose image tag labels that revision; it does not select or verify the build source. Compose builds the local submodule checkout, and the Hermes Dockerfile does not consume `HERMES_GIT_SHA`. Run `python3 scripts/check-public-hermes-pin.py` before building to compare the gitlink, checkout, tag and Quick Start. The check detects tracked and untracked changes but not ignored build-context files. Use a clean clone for a reproducible build. The earlier Quick Start validation at `5661709c` is historical and does not validate this baseline or current local changes.
+Current Hermes gitlink: `e8114f7b73be5b0e43ae6edd39055653ad74b09a`
+
+Current Hermes fork: `https://github.com/Displayer226/hermes-agent.git`
+
+The published fork's `bridge/public-minimal` branch was verified by anonymous fetch. Its minimal bridge candidate starts at official upstream `65bc6727b43c05dff410608c78fa055ec194eee0`, adds the bridge contracts at `303a9927cbb3f864f5c4971fcb030477d7e620df`, and applies corrections at the current gitlink. It carries session context through deferred construction, rebuilds and compute, keeps persona version as metadata, resolves model-only routes, and propagates OIDC retry guidance. It does not import custom Kanban or historical aggregation changes. The optional offline GPT-6.1 catalog additions are excluded; deployments depending on those additions need a separate decision.
+
+The local Compose image tag labels the revision; it does not select or verify the build source. Compose builds the local submodule checkout, and the Hermes Dockerfile does not consume `HERMES_GIT_SHA`. Run `python3 scripts/check-public-hermes-pin.py` before building to compare the gitlink, checkout, tag, Quick Start and provenance. The check detects tracked and untracked changes but not ignored build-context files. Use a clean clone for a reproducible build. The earlier Quick Start validation at `5661709c` is historical and does not validate this baseline. No real-provider or clean-clone installation validation has been run for this pin. Hermes remote CI reported zero runs due to branch filters; this is not a CI pass.
+
+The previous unpublished `94d26139abf07b60a02771f82775639d55c18e2f` pin had unknown public availability and was not anonymously retrievable during this work. Publication of the new pin does not make earlier unpublished pins recoverable; historical records remain unchanged.
 
 ## Export adaptations
 

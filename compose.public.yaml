@@ -4,7 +4,7 @@ services:
   hermes:
     build:
       context: ./hermes-agent
-    image: sillytavern-hermes/hermes-agent:94d26139
+    image: sillytavern-hermes/hermes-agent:e8114f7b
     restart: unless-stopped
     command: ["serve", "--host", "0.0.0.0"]
     environment:

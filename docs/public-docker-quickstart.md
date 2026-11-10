@@ -17,11 +17,11 @@ Clone the public repository and its pinned Hermes submodule:
 git clone --recurse-submodules https://github.com/Displayer226/sillytavern-hermes-bridge.git sillytavern-hermes-bridge
 cd sillytavern-hermes-bridge
 git -C hermes-agent rev-parse HEAD
-# Expected: 94d26139abf07b60a02771f82775639d55c18e2f
+# Expected: e8114f7b73be5b0e43ae6edd39055653ad74b09a
 python3 scripts/check-public-hermes-pin.py
 ```
 
-The check compares the recorded gitlink, checked-out commit, tracked and untracked changes, image tag, and this guide. It does not inspect ignored files. Compose builds from the local checkout; the image tag is a label, not a source pin. Use a clean clone without extra build-context files for a reproducible build. The Hermes Dockerfile does not consume a `HERMES_GIT_SHA` build argument.
+The check compares the recorded gitlink, checked-out commit, tracked and untracked changes, image tag, this guide, and the current provenance revision and fork URL. It does not inspect ignored files. Compose builds from the local checkout; the image tag is a label, not a source pin. Use a clean clone without extra build-context files for a reproducible build. The Hermes Dockerfile does not consume a `HERMES_GIT_SHA` build argument.
 
 ## Configure credentials and provider
 
